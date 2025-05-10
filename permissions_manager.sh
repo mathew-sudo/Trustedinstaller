@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # If not running as root, re-execute this script with sudo
 if [ "$EUID" -ne 0 ]; then
     echo "Script requires root. Re-running with sudo..."
@@ -278,58 +280,202 @@ console_ninja_engine() {
     echo "-------------------------------"
 }
 
-# Main menu
-main_menu() {
-    check_root
+# Helper for colored output
+color_echo() {
+    local color="$1"; shift
+    case $color in
+        red)    echo -e "\033[31m$*\033[0m" ;;
+        green)  echo -e "\033[32m$*\033[0m" ;;
+        yellow) echo -e "\033[33m$*\033[0m" ;;
+        blue)   echo -e "\033[34m$*\033[0m" ;;
+        magenta)echo -e "\033[35m$*\033[0m" ;;
+        cyan)   echo -e "\033[36m$*\033[0m" ;;
+        bold)   echo -e "\033[1m$*\033[0m" ;;
+        *)      echo "$*" ;;
+    esac
+}
 
-    echo "Permissions Manager"
-    echo "1. Manage Permissions"
-    echo "2. Set Up Auto-Run"
-    echo "3. Security Tools"
-    echo "4. Set Up Kali NetHunter/Termux"
-    echo "5. Manage Metasploit/Exploits"
-    echo "6. Manage Kali NetHunter Tools/Exploits"
-    echo "7. Float up to 6 Windows"
-    echo "8. Exit"
-    echo "9. Run bruteforce.ng hull"
-    echo "10. Console Ninja Engine (Help)"
-    read choice
+# Banner for UI
+show_banner() {
+    clear
+    color_echo cyan "==============================="
+    color_echo bold "   Permissions Manager UI"
+    color_echo cyan "==============================="
+}
 
-    case $choice in
+# Settings and UI config file path
+default_settings_file="/etc/permissions_manager.conf"
+
+# Function to load settings from config file
+load_settings() {
+    if [ -f "$default_settings_file" ]; then
+        source "$default_settings_file"
+    fi
+}
+
+# Function to save settings to config file
+save_settings() {
+    echo "# Permissions Manager Settings" > "$default_settings_file"
+    echo "DEFAULT_TERMINAL=\"$DEFAULT_TERMINAL\"" >> "$default_settings_file"
+    echo "DEFAULT_PERMS=\"$DEFAULT_PERMS\"" >> "$default_settings_file"
+    echo "DEFAULT_OWNER=\"$DEFAULT_OWNER\"" >> "$default_settings_file"
+    echo "UI_THEME=\"$UI_THEME\"" >> "$default_settings_file"
+    chmod 600 "$default_settings_file"
+}
+
+# Function to configure UI and settings
+settings_ui_config() {
+    echo "--- Settings & UI Config ---"
+    echo "1. Set Default Terminal (current: ${DEFAULT_TERMINAL:-xterm})"
+    echo "2. Set Default Permissions (current: ${DEFAULT_PERMS:-755})"
+    echo "3. Set Default Owner (current: ${DEFAULT_OWNER:-root:root})"
+    echo "4. Set UI Theme (current: ${UI_THEME:-default})"
+    echo "5. Save Settings"
+    echo "6. Back to Main Menu"
+    read -p "Choose an option: " settings_choice
+    case $settings_choice in
         1)
-            manage_permissions
+            read -p "Enter default terminal (xterm/gnome-terminal/konsole): " DEFAULT_TERMINAL
             ;;
         2)
-            setup_autorun
+            read -p "Enter default permissions (e.g., 755): " DEFAULT_PERMS
             ;;
         3)
-            security_tools
+            read -p "Enter default owner (user:group): " DEFAULT_OWNER
             ;;
         4)
-            setup_kali_nethunter_termux
+            read -p "Enter UI theme (default/dark/light): " UI_THEME
             ;;
         5)
-            setup_metasploit
+            save_settings
+            echo "Settings saved."
             ;;
         6)
-            setup_kali_nethunter_tools
-            ;;
-        7)
-            float_windows
-            ;;
-        8)
-            exit 0
-            ;;
-        9)
-            bruteforce_ng_hull
-            ;;
-        10)
-            console_ninja_engine
+            return
             ;;
         *)
             echo "Invalid choice."
             ;;
     esac
+    settings_ui_config
+}
+
+# Function to grant root/superuser permission to a user and ensure su binaries exist
+grant_root_superuser() {
+    echo "Enter the username to grant root/superuser permissions to:"
+    read username
+    # Check if user exists
+    if ! id "$username" >/dev/null 2>&1; then
+        echo "User $username does not exist."
+        return
+    fi
+    # Add user to root and sudo groups if possible
+    if grep -q '^sudo:' /etc/group; then
+        usermod -aG sudo "$username"
+        echo "Added $username to sudo group."
+    fi
+    if grep -q '^root:' /etc/group; then
+        usermod -aG root "$username"
+        echo "Added $username to root group."
+    fi
+    # Set up su binary paths and permissions
+    su_paths=(/bin/su /su /xbin/su /sbin/su /.core/bin/su)
+    for path in "${su_paths[@]}"; do
+        dir=$(dirname "$path")
+        if [ ! -d "$dir" ]; then
+            mkdir -p "$dir"
+            echo "Created directory $dir."
+        fi
+        if [ ! -f "$path" ]; then
+            # Try to copy from a known su binary if available
+            if [ -f /bin/su ]; then
+                cp /bin/su "$path"
+                echo "Copied /bin/su to $path."
+            else
+                touch "$path"
+                echo "Created empty su binary at $path (please replace with a valid su binary)."
+            fi
+        fi
+        chmod 6755 "$path"
+        chown root:root "$path"
+        echo "Set suid and root ownership for $path."
+    done
+    echo "Root/superuser permissions granted to $username and su binaries ensured."
+}
+
+# Function to grant superuser/root on Android mobile phone or tablet (Termux/NetHunter)
+grant_mobile_superuser() {
+    echo "Granting superuser/root access for mobile device (Android/Termux/NetHunter)..."
+    su_paths=(/system/xbin/su /system/bin/su /sbin/su /su/bin/su /su/xbin/su /system/su /system/xbin/daemonsu /system/xbin/busybox /.core/bin/su)
+    for path in "${su_paths[@]}"; do
+        dir=$(dirname "$path")
+        if [ ! -d "$dir" ]; then
+            mkdir -p "$dir"
+            chmod 755 "$dir"
+            chown root:root "$dir"
+            echo "Created and set permissions for directory $dir."
+        fi
+        if [ ! -f "$path" ]; then
+            if [ -f /bin/su ]; then
+                cp /bin/su "$path"
+                echo "Copied /bin/su to $path."
+            else
+                touch "$path"
+                echo "Created empty su binary at $path (please replace with a valid su binary for Android/Termux)."
+            fi
+        fi
+        chmod 6755 "$path"
+        chown root:root "$path"
+        echo "Set suid and root ownership for $path."
+    done
+    # Add current user to root group if possible
+    if grep -q '^root:' /etc/group; then
+        usermod -aG root $(whoami)
+        echo "Added $(whoami) to root group."
+    fi
+    echo "Superuser/root access setup attempted for mobile device. Manual steps may still be required for full root on Android."
+}
+
+# Load settings at script start
+load_settings
+
+# Main menu with UI improvements and all options
+main_menu() {
+    check_root
+    while true; do
+        show_banner
+        color_echo yellow "Select an option:"
+        echo "1. Manage Permissions"
+        echo "2. Set Up Auto-Run"
+        echo "3. Security Tools"
+        echo "4. Set Up Kali NetHunter/Termux"
+        echo "5. Manage Metasploit/Exploits"
+        echo "6. Manage Kali NetHunter Tools/Exploits"
+        echo "7. Float up to 6 Windows"
+        echo "8. Exit"
+        echo "9. Run bruteforce.ng hull"
+        echo "10. Console Ninja Engine (Help)"
+        echo "11. Grant Root/Superuser Permission to User & Ensure su Binaries"
+        echo "12. Grant Superuser/Root for Mobile Device (Android/Tablet)"
+        echo "13. Settings & UI Config"
+        read -p "Enter choice [1-13]: " choice
+        case $choice in
+            1) manage_permissions ;;
+            2) setup_autorun ;;
+            3) security_tools ;;
+            4) setup_kali_nethunter_termux ;;
+            5) setup_metasploit ;;
+            6) setup_kali_nethunter_tools ;;
+            7) float_windows ;;
+            8) exit 0 ;;
+            9) bruteforce_ng_hull ;;
+            10) console_ninja_engine ;;
+            11) grant_root_superuser ;;
+            12) grant_mobile_superuser ;;
+            13) settings_ui_config ;;
+            *) color_echo red "Invalid choice." ; sleep 1 ;;
+        esac
+    done
 }
 
 # Run the main menu
