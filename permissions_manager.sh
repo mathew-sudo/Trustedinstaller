@@ -1,4 +1,8 @@
-#!/bin/bash
+# If not running as root, re-execute this script with sudo
+if [ "$EUID" -ne 0 ]; then
+    echo "Script requires root. Re-running with sudo..."
+    exec sudo "$0" "$@"
+fi
 
 # Permissions Manager Script
 # This script provides superuser-level permission management and security tools.
@@ -11,15 +15,22 @@ check_root() {
     fi
 }
 
-# Function to manage file permissions
+# Enhanced manage_permissions function to include recursive permission changes
 manage_permissions() {
     echo "Enter the file or directory path:"
     read path
+
+    if [ ! -e "$path" ]; then
+        echo "Error: Path does not exist."
+        return
+    fi
 
     echo "Choose an action:"
     echo "1. Change ownership"
     echo "2. Modify permissions"
     echo "3. View current permissions"
+    echo "4. Change ownership recursively"
+    echo "5. Modify permissions recursively"
     read action
 
     case $action in
@@ -37,6 +48,18 @@ manage_permissions() {
             ;;
         3)
             ls -l "$path"
+            ;;
+        4)
+            echo "Enter the new owner (user:group):"
+            read owner
+            chown -R $owner "$path"
+            echo "Ownership recursively changed to $owner."
+            ;;
+        5)
+            echo "Enter the new permissions (e.g., 755):"
+            read perms
+            chmod -R $perms "$path"
+            echo "Permissions recursively changed to $perms."
             ;;
         *)
             echo "Invalid action."
@@ -72,20 +95,22 @@ security_tools() {
     netstat -tuln
 }
 
-# Function to set up Kali NetHunter or Termux environment
+# Function to set up Kali NetHunter or Termux environment with UI
 setup_kali_nethunter_termux() {
     echo "Setting up environment for Kali NetHunter or Termux..."
-
     echo "Choose an option:"
-    echo "1. Install Kali NetHunter"
+    echo "1. Install Kali NetHunter (Full UI)"
     echo "2. Install Termux"
     read env_choice
 
     case $env_choice in
         1)
-            echo "Installing Kali NetHunter..."
-            apt update && apt install -y kali-linux-default
-            echo "Kali NetHunter installed successfully."
+            echo "Installing Kali NetHunter (Full UI)..."
+            apt update && apt install -y kali-linux-default kali-desktop-xfce tightvncserver
+            echo "Kali NetHunter base and XFCE desktop installed."
+            echo "Setting up VNC server for graphical UI..."
+            vncserver :1
+            echo "To access the Kali NetHunter UI, connect your VNC client to localhost:5901."
             ;;
         2)
             echo "Installing Termux..."
@@ -132,7 +157,6 @@ setup_metasploit() {
 # Function to install and manage Kali NetHunter tools and exploits
 setup_kali_nethunter_tools() {
     echo "Setting up Kali NetHunter tools and exploits..."
-
     echo "Choose an option:"
     echo "1. Install Full Kali NetHunter Toolset"
     echo "2. List Available Tools"
@@ -166,6 +190,94 @@ setup_kali_nethunter_tools() {
     esac
 }
 
+# Function to float (run) up to 6 terminal windows
+float_windows() {
+    local max_windows=6
+    local current_windows
+    # Try to count open xterm/gnome-terminal/konsole windows
+    current_windows=$(pgrep -c -f 'xterm|gnome-terminal|konsole')
+    if [ "$current_windows" -ge "$max_windows" ]; then
+        echo "Maximum of $max_windows floating windows already running."
+        return
+    fi
+    echo "Choose terminal to float (1: xterm, 2: gnome-terminal, 3: konsole):"
+    read term_choice
+    case $term_choice in
+        1)
+            if command -v xterm >/dev/null 2>&1; then
+                xterm &
+            else
+                echo "xterm not installed."
+            fi
+            ;;
+        2)
+            if command -v gnome-terminal >/dev/null 2>&1; then
+                gnome-terminal &
+            else
+                echo "gnome-terminal not installed."
+            fi
+            ;;
+        3)
+            if command -v konsole >/dev/null 2>&1; then
+                konsole &
+            else
+                echo "konsole not installed."
+            fi
+            ;;
+        *)
+            echo "Invalid choice."
+            ;;
+    esac
+}
+
+# Function to run bruteforce.ng hull
+bruteforce_ng_hull() {
+    echo "Running bruteforce.ng hull..."
+    echo "Enter the target (e.g., IP or hostname):"
+    read target
+    echo "Enter the username to bruteforce (leave blank to skip):"
+    read username
+    echo "Enter the path to the password wordlist (e.g., /usr/share/wordlists/rockyou.txt):"
+    read wordlist
+    echo "Enter the service to bruteforce (e.g., ssh, ftp, http):"
+    read service
+
+    if [ -z "$target" ] || [ -z "$wordlist" ] || [ -z "$service" ]; then
+        echo "Target, wordlist, and service are required."
+        return
+    fi
+
+    if ! command -v hydra >/dev/null 2>&1; then
+        echo "Hydra is not installed. Installing hydra..."
+        apt update && apt install -y hydra
+    fi
+
+    if [ -n "$username" ]; then
+        echo "Starting bruteforce attack on $service://$target with username $username..."
+        hydra -l "$username" -P "$wordlist" "$target" "$service"
+    else
+        echo "Starting bruteforce attack on $service://$target with usernames from wordlist..."
+        hydra -L "$wordlist" -P "$wordlist" "$target" "$service"
+    fi
+}
+
+# Function to launch Console Ninja Engine
+console_ninja_engine() {
+    echo "Launching Console Ninja Engine..."
+    echo "--- Console Ninja Help Menu ---"
+    echo "1. Manage Permissions: Change, view, or set permissions recursively."
+    echo "2. Set Up Auto-Run: Add scripts to system startup."
+    echo "3. Security Tools: Scan for world-writable files, SUID/SGID files, open ports."
+    echo "4. Set Up Kali NetHunter/Termux: Install Kali NetHunter (with UI) or Termux."
+    echo "5. Manage Metasploit/Exploits: Install, launch, or search Metasploit."
+    echo "6. Manage Kali NetHunter Tools/Exploits: Install, list, search, or run tools."
+    echo "7. Float up to 6 Windows: Launch up to 6 terminal windows."
+    echo "8. Exit: Quit the Permissions Manager."
+    echo "9. Run bruteforce.ng hull: Launch a bruteforce attack using hydra."
+    echo "10. Console Ninja Engine: Show this help menu."
+    echo "-------------------------------"
+}
+
 # Main menu
 main_menu() {
     check_root
@@ -177,7 +289,10 @@ main_menu() {
     echo "4. Set Up Kali NetHunter/Termux"
     echo "5. Manage Metasploit/Exploits"
     echo "6. Manage Kali NetHunter Tools/Exploits"
-    echo "7. Exit"
+    echo "7. Float up to 6 Windows"
+    echo "8. Exit"
+    echo "9. Run bruteforce.ng hull"
+    echo "10. Console Ninja Engine (Help)"
     read choice
 
     case $choice in
@@ -200,7 +315,16 @@ main_menu() {
             setup_kali_nethunter_tools
             ;;
         7)
+            float_windows
+            ;;
+        8)
             exit 0
+            ;;
+        9)
+            bruteforce_ng_hull
+            ;;
+        10)
+            console_ninja_engine
             ;;
         *)
             echo "Invalid choice."
