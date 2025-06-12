@@ -31,3 +31,9 @@ cd "$BASE_DIR"
 virtualenv venv
 source venv/bin/activate
 pip3 install requests beautifulsoup4 colorama prompt_toolkit
+export SECURITY_TOOLS_HOME="$HOME/security_tools"
+export PATH="$PATH:$SECURITY_TOOLS_HOME/bin"
+
+alias msfconsole="cd $SECURITY_TOOLS_HOME/tools/metasploit && ./msfconsole"
+alias fatrat="cd $SECURITY_TOOLS_HOME/tools/fatrat && ./fatrat"
+alias kraken="cd $SECURITY_TOOLS_HOME/tools/kraken && python kraken.py"
