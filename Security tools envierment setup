@@ -322,7 +322,7 @@ if ($Operation -eq "elevate" -and $TargetPath) {
 }
 EOF
     
-    # Create enhanced cross-platform wrapper with PowerShell validation support
+    # Create enhanced cross-platform wrapper with proper function structure
     cat > "$ti_dir/trustedinstaller_wrapper.sh" << 'EOF'
 #!/bin/bash
 # TrustedInstaller Cross-Platform Wrapper - Enhanced Version
@@ -364,6 +364,56 @@ validate_target_path() {
     return 0
 }
 
+# Enhanced Windows elevation function
+elevate_windows() {
+    local target_path="$1"
+    local script_path=""
+    
+    # Locate PowerShell script with enhanced search
+    local possible_locations=(
+        "$HOME/security_tools/trustedinstaller/trustedinstaller_elevation.ps1"
+        "$(dirname "$0")/trustedinstaller_elevation.ps1"
+        "./trustedinstaller_elevation.ps1"
+    )
+    
+    for location in "${possible_locations[@]}"; do
+        if [[ -f "$location" ]]; then
+            script_path="$location"
+            break
+        fi
+    done
+    
+    if [[ -z "$script_path" ]]; then
+        echo "Error: TrustedInstaller PowerShell script not found"
+        echo "Searched locations:"
+        printf '  %s\n' "${possible_locations[@]}"
+        return 1
+    fi
+    
+    log_ti_operation "INFO" "Using PowerShell script: $script_path"
+    
+    # Validate environment first
+    echo "Validating Windows TrustedInstaller environment..."
+    if command -v powershell.exe >/dev/null 2>&1; then
+        if ! powershell.exe -ExecutionPolicy Bypass -File "$script_path" -Operation "validate" >/dev/null 2>&1; then
+            echo "Warning: Environment validation failed, proceeding anyway..."
+        fi
+        
+        # Execute elevation
+        powershell.exe -ExecutionPolicy Bypass -File "$script_path" -TargetPath "$target_path" -Operation "elevate"
+    elif command -v pwsh >/dev/null 2>&1; then
+        if ! pwsh -ExecutionPolicy Bypass -File "$script_path" -Operation "validate" >/dev/null 2>&1; then
+            echo "Warning: Environment validation failed, proceeding anyway..."
+        fi
+        
+        # Execute elevation
+        pwsh -ExecutionPolicy Bypass -File "$script_path" -TargetPath "$target_path" -Operation "elevate"
+    else
+        echo "Error: PowerShell not available"
+        return 1
+    fi
+}
+
 elevate_to_level_600() {
     local target_path="$1"
     local os_type=$(detect_os)
@@ -386,56 +436,6 @@ elevate_to_level_600() {
     
     case "$os_type" in
         "windows")
-            # Enhanced Windows elevation with validation support
-            elevate_windows() {
-                local target_path="$1"
-                local script_path=""
-                
-                # Locate PowerShell script with enhanced search
-                local possible_locations=(
-                    "$HOME/security_tools/trustedinstaller/trustedinstaller_elevation.ps1"
-                    "$(dirname "$0")/trustedinstaller_elevation.ps1"
-                    "./trustedinstaller_elevation.ps1"
-                )
-                
-                for location in "${possible_locations[@]}"; do
-                    if [[ -f "$location" ]]; then
-                        script_path="$location"
-                        break
-                    fi
-                done
-                
-                if [[ -z "$script_path" ]]; then
-                    echo "Error: TrustedInstaller PowerShell script not found"
-                    echo "Searched locations:"
-                    printf '  %s\n' "${possible_locations[@]}"
-                    return 1
-                fi
-                
-                log_ti_operation "INFO" "Using PowerShell script: $script_path"
-                
-                # Validate environment first
-                echo "Validating Windows TrustedInstaller environment..."
-                if command -v powershell.exe >/dev/null 2>&1; then
-                    if ! powershell.exe -ExecutionPolicy Bypass -File "$script_path" -Operation "validate" >/dev/null 2>&1; then
-                        echo "Warning: Environment validation failed, proceeding anyway..."
-                    fi
-                    
-                    # Execute elevation
-                    powershell.exe -ExecutionPolicy Bypass -File "$script_path" -TargetPath "$target_path" -Operation "elevate"
-                elif command -v pwsh >/dev/null 2>&1; then
-                    if ! pwsh -ExecutionPolicy Bypass -File "$script_path" -Operation "validate" >/dev/null 2>&1; then
-                        echo "Warning: Environment validation failed, proceeding anyway..."
-                    fi
-                    
-                    # Execute elevation
-                    pwsh -ExecutionPolicy Bypass -File "$script_path" -TargetPath "$target_path" -Operation "elevate"
-                else
-                    echo "Error: PowerShell not available"
-                    return 1
-                fi
-            }
-            
             elevate_windows "$target_path"
             ;;
         "linux")
@@ -475,7 +475,7 @@ elevate_to_level_600() {
     esac
 }
 
-# Main execution
+# Enhanced main execution with help system
 main() {
     if [[ $# -eq 0 ]]; then
         echo "TrustedInstaller Level 600 Elevation Tool"
@@ -495,7 +495,7 @@ main() {
     
     case "$1" in
         -h|--help)
-            # Show help (handled above)
+            # Show help message (handled above)
             ;;
         -t|--test)
             echo "=== Environment Test ==="
@@ -527,6 +527,9 @@ main() {
             ;;
     esac
 }
+
+# Execute main function
+main "$@"
 EOF
     
     chmod +x "$ti_dir/trustedinstaller_wrapper.sh"

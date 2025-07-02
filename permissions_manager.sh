@@ -742,17 +742,20 @@ manage_trustedinstaller() {
 # Load settings at script start
 load_settings
 
-# Enhanced main menu with synchronized TrustedInstaller integration
+# Enhanced main menu with better error handling
 main_menu() {
     check_root
     
+    # Create session ID for tracking
     local session_id="$$_$(date +%s)"
     log_security_event "INFO" "Session started: $session_id"
     
+    # Set session timeout
     local session_start=$(date +%s)
     local session_timeout=3600  # 1 hour
     
     while true; do
+        # Check session timeout
         local current_time=$(date +%s)
         if (( current_time - session_start > session_timeout )); then
             echo "Session timeout reached. Exiting for security."
@@ -825,6 +828,7 @@ main_menu() {
                 ;;
         esac
         
+        # Add pause after operations
         if [[ "$choice" != "8" && "$choice" != "10" && "$choice" != "14" ]]; then
             echo
             read -p "Press Enter to continue..." -r
@@ -937,10 +941,6 @@ chmod 600 "$LOG_FILE" 2>/dev/null
 
 # Run the main menu
 main_menu
-    while true; do
-        echo "--- Settings & UI Config ---"
-        echo "1. Set Default Terminal (current: ${DEFAULT_TERMINAL:-xterm})"
-        echo "2. Set Default Permissions (current: ${DEFAULT_PERMS:-755})"
         echo "3. Set Default Owner (current: ${DEFAULT_OWNER:-root:root})"
         echo "4. Set UI Theme (current: ${UI_THEME:-default})"
         echo "5. Save Settings"
